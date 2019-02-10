@@ -2,26 +2,51 @@
 #include "MHZ19.h"
 #include <U8g2lib.h>
 
+// Инициализация дисплея
 U8X8_SSD1306_128X32_UNIVISION_HW_I2C u8x8(/* reset=*/ 16, /* clock=*/ 5, /* data=*/ 4);
 
+// Иницализация софтового RS-232
 SoftwareSerial ss(12,13);
-MHZ19 mhz(&ss);
 
-int Average10Minutes = 0;
+// Инициализация модуля получения данных с сенсора MH-Z19B
+MHZ19 mhz(&ss);
 
 int MaxCo2 = 1;
 int MinCo2 = 5000;
 
-int MaxCo2ThreeHours = 1;
-int MinCo2ThreeHours = 5000;
+int MaxCo2TwoHours = 1;
+int MinCo2TwoHours = 5000;
+int TwoHours = 360 * 2;
 
+// Длительность одного тика в миллисекундах
 int OneTick = 10000;
-int NumberOfTicks = 0;
-int NumberOfTicksForAverage = 0;
-int NumberOfInitTicks = 0;
-int ThreeHours = 360 * 3;
-int TenMinutes = 600;
 
+// Общее количество тиков
+int NumberOfTicks = 0;
+
+// Количество тиков для инициализации
+int NumberOfInitTicks = 1;
+
+
+// Среднее значение
+int Average = 0;
+
+// Коэффициент усреденения (при тике равном 10 секунд получается скользящее среднее на 200 секунд)
+int AverageFactor = 20;
+
+// считает количество тиков необходимых для расчёта среднего
+int NumberOfTicksForAverage = 0;
+
+int InitTicks = 0;
+
+float AverageLong = 0;
+
+// 6 Часов
+int AverageLongFactor = 21600;
+
+int NumberOfTicksForAverageLong = 0;
+
+// Первоначальная установка параметров
 void setup()
 {
   Serial.begin(115200);
@@ -34,29 +59,31 @@ void setup()
   delay(5000);
 }
 
+// Основной рабочий цикл
 void loop()
 {
   MHZ19_RESULT response = mhz.retrieveData();
   if (response == MHZ19_RESULT_OK)
   {
-    //Serial.print(F("CO2: "));
-   // Serial.println(mhz.getCO2());
-    //Serial.print(F("Min CO2: "));
-    //Serial.println(mhz.getMinCO2());
-   //Serial.print(F("Temperature: "));
+    //Serial.print(F("Temperature: "));
     //Serial.println(mhz.getTemperature());
-    Serial.print(F("Accuracy: "));
-    Serial.println(mhz.getAccuracy());
 
     u8x8.setFont(u8x8_font_amstrad_cpc_extended_r);
     char cstr[16];
     int co2;
 
-    NumberOfInitTicks++;
-    if (NumberOfInitTicks < 20)
+    InitTicks++;
+    if (InitTicks < NumberOfInitTicks)
     {
-      u8x8.drawString(0, 2, "Calibration");
+      u8x8.drawString(0, 2, " Calibration...");
       goto nextCycle;
+    }
+    else
+    {     
+      sprintf(cstr, "               ");
+      u8x8.drawString(0, 0, cstr);
+      u8x8.drawString(0, 1, cstr);
+      u8x8.drawString(0, 2, cstr);
     }
 
     co2 = mhz.getCO2();
@@ -75,46 +102,58 @@ void loop()
       MinCo2 = co2;      
     }
 
-    sprintf(cstr, "Min %04d", MinCo2);
+    sprintf(cstr, "Mi %04d", MinCo2);
     u8x8.drawString(0, 1, cstr);
 
-    sprintf(cstr, "Max %04d", MaxCo2);
+    sprintf(cstr, "Ma %04d", MaxCo2);
     u8x8.drawString(0, 2, cstr);
 
-    NumberOfTicksForAverage++;
-    Average10Minutes = Average10Minutes + co2;
-    sprintf(cstr, "A %04d", Average10Minutes/NumberOfTicksForAverage);
-    u8x8.drawString(9, 0, cstr);
     
-    if (NumberOfTicksForAverage >= TenMinutes)
+    if (NumberOfTicksForAverage <= AverageFactor)
     {
-       Average10Minutes = 0;
-       NumberOfTicksForAverage = 0;
+      NumberOfTicksForAverage++;
     }
+    
+    Average = Average + (co2 - Average) / min(NumberOfTicksForAverage, AverageFactor);
+    sprintf(cstr, "A  %04d", Average);
+    u8x8.drawString(9, 0, cstr);
 
-    if (co2 > MaxCo2ThreeHours)
+    if (NumberOfTicksForAverageLong <= AverageLongFactor)
     {
-      MaxCo2ThreeHours = co2;      
+      NumberOfTicksForAverageLong++;
     }
+    AverageLong = AverageLong + (float)(((float)co2 - AverageLong) / ((float) (min(NumberOfTicksForAverageLong, AverageLongFactor))));
 
-    if ((co2 > 400) && (co2 < MinCo2ThreeHours))
-    {
-      MinCo2ThreeHours = co2;      
-    }
+    char tempStr[4];
+    dtostrf(AverageLong, 4, 0, tempStr);
+    sprintf(cstr, "A6h%s", tempStr);
 
-    sprintf(cstr, "3h %04d", MinCo2ThreeHours);
-    u8x8.drawString(9, 1, cstr);
+   // sprintf(cstr, "A6 %04d", AverageLong);
+    u8x8.drawString(8, 1, cstr);
+    
+    //if (co2 > MaxCo2TwoHours)
+    //{
+//      MaxCo2TwoHours = co2;      
+    //}
 
-    sprintf(cstr, "3h %04d", MaxCo2ThreeHours);
-    u8x8.drawString(9, 2, cstr);
+    //if ((co2 > 400) && (co2 < MinCo2TwoHours))
+    //{
+      //MinCo2TwoHours = co2;      
+    //}
 
-    NumberOfTicks++;
-    if (NumberOfTicks >= ThreeHours)
-    {
-       MaxCo2ThreeHours = 0;
-       MinCo2ThreeHours = 5000;
-       NumberOfTicks = 0;
-    }
+    //sprintf(cstr, "3h %04d", MinCo2TwoHours);
+    //u8x8.drawString(9, 1, cstr);
+
+    //sprintf(cstr, "3h %04d", MaxCo2TwoHours);
+    //u8x8.drawString(9, 2, cstr);
+
+    //NumberOfTicks++;
+    //if (NumberOfTicks >= TwoHours)
+    //{
+      // MaxCo2TwoHours = 0;
+       //MinCo2TwoHours = 5000;
+       //NumberOfTicks = 0;
+    //}
 
     nextCycle:
     {}
