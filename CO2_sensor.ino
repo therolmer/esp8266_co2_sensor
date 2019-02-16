@@ -2,7 +2,7 @@
 
 #include <SoftwareSerial.h>
 #include "MHZ19.h"
-#include <U8g2lib.h>
+//#include <U8g2lib.h>
 
 #include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>
@@ -16,7 +16,7 @@ char ssid[] = "Hous";
 char pass[] = "saymellon";
 
 // Инициализация дисплея
-U8X8_SSD1306_128X32_UNIVISION_HW_I2C u8x8(/* reset=*/ 16, /* clock=*/ 5, /* data=*/ 4);
+//U8X8_SSD1306_128X32_UNIVISION_HW_I2C u8x8(/* reset=*/ 16, /* clock=*/ 5, /* data=*/ 4);
 
 // Иницализация софтового RS-232
 SoftwareSerial ss(12,13);
@@ -43,8 +43,8 @@ int NumberOfInitTicks = 20;
 // Среднее значение
 float Average = 0;
 
-// Коэффициент усреденения (при тике равном 10 секунд получается скользящее среднее на 30 секунд)
-int AverageFactor = 3;
+// Коэффициент усреденения (при тике равном 10 секунд получается скользящее среднее на 2 минуты)
+int AverageFactor = 12;
 
 // считает количество тиков необходимых для расчёта среднего
 int NumberOfTicksForAverage = 0;
@@ -66,9 +66,9 @@ void setup()
 
   ss.begin(9600);
   mhz.setAutoCalibration(false);
-  u8x8.begin();
+  //u8x8.begin();
 
-  u8x8.setFont(u8x8_font_amstrad_cpc_extended_r);
+  //u8x8.setFont(u8x8_font_amstrad_cpc_extended_r);
   char cstr[16];
 
   if (WiFi.status() == WL_CONNECTED)
@@ -84,20 +84,24 @@ void setup()
   while ((WiFi.status() != WL_CONNECTED) || (attemps > 20))
   {
     delay(500);    
-    Serial.print(".");
+    Serial.print(".");    
+    
+    sprintf(cstr, "Connecting Wi-Fi");
+    //u8x8.drawString(0, 1, cstr);
+    
     attemps++;
   }
 
   if (attemps <= 20)
   {    
-    sprintf(cstr, "Wi-Fi connected");
+    sprintf(cstr, "Wi-Fi connected ");
   }
   else
   {
-    sprintf(cstr, "Wi-Fi ERROR");
+    sprintf(cstr, "Wi-Fi ERROR     ");
   }
 
-  u8x8.drawString(0, 1, cstr);
+  //u8x8.drawString(0, 1, cstr);
   delay(1000);
 
   Blynk.config(auth);
@@ -114,22 +118,22 @@ void loop()
     //Serial.println(mhz.getTemperature());
         
     Blynk.run();
-    u8x8.setFont(u8x8_font_amstrad_cpc_extended_r);
+    //u8x8.setFont(u8x8_font_amstrad_cpc_extended_r);
     char cstr[16];
     int co2;
 
     InitTicks++;
     if (InitTicks < NumberOfInitTicks)
     {
-      u8x8.drawString(0, 2, " Calibration...");
+     // u8x8.drawString(0, 2, " Calibration...");
       goto nextCycle;
     }
     else
     {     
       sprintf(cstr, "               ");
-      u8x8.drawString(0, 0, cstr);
-      u8x8.drawString(0, 1, cstr);
-      u8x8.drawString(0, 2, cstr);
+     // u8x8.drawString(0, 0, cstr);
+     // u8x8.drawString(0, 1, cstr);
+     // u8x8.drawString(0, 2, cstr);
     }
 
     co2 = mhz.getCO2();
@@ -149,10 +153,10 @@ void loop()
     }
 
     sprintf(cstr, "Mi %04d", MinCo2);
-    u8x8.drawString(0, 1, cstr);
+    //u8x8.drawString(0, 1, cstr);
 
     sprintf(cstr, "Ma %04d", MaxCo2);
-    u8x8.drawString(0, 2, cstr);
+    //u8x8.drawString(0, 2, cstr);
 
     
     if (NumberOfTicksForAverage <= AverageFactor)
@@ -165,7 +169,7 @@ void loop()
     char tempStr[4];
     dtostrf(Average, 4, 0, tempStr);
     sprintf(cstr, "A  %s", tempStr);
-    u8x8.drawString(0, 0, cstr);
+    //u8x8.drawString(0, 0, cstr);
 
     if (NumberOfTicksForAverageLong <= AverageLongFactor)
     {
@@ -176,9 +180,9 @@ void loop()
     dtostrf(AverageLong, 4, 0, tempStr);
     sprintf(cstr, "A6h%s", tempStr);
 
-    u8x8.drawString(8, 0, cstr);
+    //u8x8.drawString(8, 0, cstr);
 
-    if (InitTicks % 6 == 0)
+    if (InitTicks % 30 == 0)
     {
       Blynk.virtualWrite(V0, co2);  
     }
